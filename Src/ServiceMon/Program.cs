@@ -18,10 +18,12 @@ namespace ServiceStatusChecker
         static System.Timers.Timer refreshTimer;
         static DateTime lastRefreshTime;
         static System.Timers.Timer titleUpdateTimer;
+        static ConsoleColor originalConsoleColor; // Store the original console color
 
         static async Task Main(string[] args)
         {
             Console.Title = "Lumina - Status Validator";
+            originalConsoleColor = Console.ForegroundColor; // Store the original console color
             LoadServers();
 
             // Start a separate task to handle user input
@@ -88,7 +90,8 @@ namespace ServiceStatusChecker
                     if (reply.Status == IPStatus.Success)
                     {
                         Console.ForegroundColor = GetLatencyColor(reply.RoundtripTime);
-                        Console.WriteLine($"Server: {server.Name} is operational.");
+                        Console.Write($"Server: {server.Name} is operational.");
+                        Console.WriteLine();
                         Console.WriteLine($"Latency: {reply.RoundtripTime} ms");
                     }
                     else
@@ -104,7 +107,7 @@ namespace ServiceStatusChecker
                 }
             }
 
-            Console.ResetColor();
+            Console.ForegroundColor = originalConsoleColor; // Reset the console color to the original color
         }
 
         static ConsoleColor GetLatencyColor(long latency)
@@ -153,6 +156,8 @@ namespace ServiceStatusChecker
             Console.WriteLine("- edit: Edit an existing server in the list");
             Console.WriteLine("- remove: Remove a server from the list");
             Console.WriteLine("- query <ServerName> <PortNumber>: Query a server's port status");
+            Console.WriteLine("- tag <ServerName> <Tag>: Add a tag to a server");
+            Console.WriteLine("- removetag <ServerName> <Tag>: Remove a tag from a server");
         }
 
         static void LoadServers()
@@ -189,7 +194,7 @@ namespace ServiceStatusChecker
             }
         }
 
-        static Server GetServerByName(string name)
+        static Server? GetServerByName(string name)
         {
             return servers.FirstOrDefault(s => s.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
         }
@@ -295,7 +300,7 @@ namespace ServiceStatusChecker
                 try
                 {
                     IPAddress[] addressList = await Dns.GetHostAddressesAsync(server.IPAddress);
-                    ipAddress = addressList.FirstOrDefault()!;
+                    ipAddress = addressList.FirstOrDefault();
                     if (ipAddress != null)
                     {
                         Console.WriteLine($"Resolved IP Address: {ipAddress}");
@@ -325,9 +330,9 @@ namespace ServiceStatusChecker
                     {
                         PingReply reply = await new Ping().SendPingAsync(ipAddress);
                         Console.ForegroundColor = GetLatencyColor(reply.RoundtripTime);
-                        Console.WriteLine("Status: Online");
+                        Console.Write("Status: Online");
+                        Console.WriteLine();
                         Console.WriteLine($"Latency: {reply.RoundtripTime} ms");
-                        Console.ResetColor();
                     }
                     else
                     {
@@ -341,7 +346,20 @@ namespace ServiceStatusChecker
                     Console.ResetColor();
                 }
             }
+
+            // Display tags information
+            if (server.Tags.Count > 0)
+            {
+                Console.WriteLine($"Tags: {string.Join(", ", server.Tags)}");
+            }
+            else
+            {
+                Console.WriteLine("Tags: None");
+            }
+
+            Console.ResetColor(); // Reset the console color to the original color
         }
+
 
 
         static async Task HandleUserInput()
@@ -350,137 +368,240 @@ namespace ServiceStatusChecker
             {
                 // Process user input
                 Console.WriteLine("\nEnter a command (type 'help' for a list of commands):");
-                string command = Console.ReadLine()!;
+                string command = Console.ReadLine();
 
-                if (command == "help")
+                switch (command)
                 {
-                    DisplayHelp();
-                }
-                else if (command.StartsWith("info"))
-                {
-                    string[] parts = command.Split(' ', 2);
-                    if (parts.Length == 2)
-                    {
-                        string serverName = parts[1];
-                        if (serverName.StartsWith('"') && serverName.EndsWith('"'))
+                    case "help":
+                        DisplayHelp();
+                        break;
+                    case var infoCommand when infoCommand.StartsWith("info"):
                         {
-                            serverName = serverName.Trim('"');
-                        }
-                        var server = GetServerByName(serverName);
-                        if (server != null)
-                        {
-                            await DisplayServerInfo(server);
-                        }
-                        else
-                        {
-                            Console.WriteLine($"Server '{serverName}' does not exist.");
-                        }
-                    }
-                    else
-                    {
-                        Console.WriteLine("Invalid command format. Usage: info <ServerName>");
-                    }
-                }
-                else if (command.StartsWith("maintenance"))
-                {
-                    string[] parts = command.Split(' ', 2);
-                    if (parts.Length == 2 || parts.Length == 1)
-                    {
-                        string serverName = parts.Length == 2 ? parts[1] : parts[0];
-                        if (serverName.StartsWith('"') && serverName.EndsWith('"'))
-                        {
-                            serverName = serverName.Trim('"');
-                        }
-                        var server = GetServerByName(serverName);
-                        if (server != null)
-                        {
-                            ToggleMaintenanceMode(server);
-                        }
-                        else
-                        {
-                            Console.WriteLine($"Server '{serverName}' does not exist.");
-                        }
-                    }
-                    else
-                    {
-                        Console.WriteLine("Invalid command format. Usage: maintenance <ServerName>");
-                    }
-                }
-                else if (command.StartsWith("config"))
-                {
-                    string[] parts = command.Split(' ', 2);
-                    if (parts.Length == 2)
-                    {
-                        if (int.TryParse(parts[1], out int minutes))
-                        {
-                            ConfigureRefreshTime(minutes);
-                        }
-                        else
-                        {
-                            Console.WriteLine("Invalid refresh time. Please enter a valid integer.");
-                        }
-                    }
-                    else
-                    {
-                        Console.WriteLine("Invalid command format. Usage: config <Minutes>");
-                    }
-                }
-                else if (command == "clear")
-                {
-                    await DisplayServerStatuses();
-                }
-                else if (command == "exit")
-                {
-                    SaveServers();
-                    Environment.Exit(0);
-                }
-                else if (command == "add")
-                {
-                    await AddServer();
-                    SaveServers();
-                }
-                else if (command == "edit")
-                {
-                    await EditServer();
-                    SaveServers();
-                }
-                else if (command == "remove")
-                {
-                    await RemoveServer();
-                    SaveServers();
-                }
-                else if (command.StartsWith("query"))
-                {
-                    string[] parts = command.Split(' ', 3);
-                    if (parts.Length == 3)
-                    {
-                        string serverName = parts[1];
-                        string portNumberStr = parts[2];
-                        if (serverName.StartsWith('"') && serverName.EndsWith('"'))
-                        {
-                            serverName = serverName.Trim('"');
-                        }
-                        if (int.TryParse(portNumberStr, out int portNumber))
-                        {
-                            var server = GetServerByName(serverName);
-                            if (server != null)
+                            string[] parts = infoCommand.Split(' ', 2);
+                            if (parts.Length == 2)
                             {
-                                QueryServerPort(server, portNumber);
+                                string serverName = parts[1];
+                                if (serverName.StartsWith('"') && serverName.EndsWith('"'))
+                                {
+                                    serverName = serverName.Trim('"');
+                                }
+                                var server = GetServerByName(serverName);
+                                if (server != null)
+                                {
+                                    await DisplayServerInfo(server);
+                                }
+                                else
+                                {
+                                    Console.WriteLine($"Server '{serverName}' does not exist.");
+                                }
                             }
                             else
                             {
-                                Console.WriteLine($"Server '{serverName}' does not exist.");
+                                Console.WriteLine("Invalid command format. Usage: info <ServerName>");
                             }
+                            break;
                         }
-                        else
+                    case var maintenanceCommand when maintenanceCommand.StartsWith("maintenance"):
                         {
-                            Console.WriteLine("Invalid port number. Please enter a valid integer.");
+                            string[] parts = maintenanceCommand.Split(' ', 2);
+                            if (parts.Length == 2 || parts.Length == 1)
+                            {
+                                string serverName = parts.Length == 2 ? parts[1] : parts[0];
+                                if (serverName.StartsWith('"') && serverName.EndsWith('"'))
+                                {
+                                    serverName = serverName.Trim('"');
+                                }
+                                var server = GetServerByName(serverName);
+                                if (server != null)
+                                {
+                                    ToggleMaintenanceMode(server);
+                                }
+                                else
+                                {
+                                    Console.WriteLine($"Server '{serverName}' does not exist.");
+                                }
+                            }
+                            else
+                            {
+                                Console.WriteLine("Invalid command format. Usage: maintenance <ServerName>");
+                            }
+                            break;
                         }
-                    }
-                    else
-                    {
-                        Console.WriteLine("Invalid command format. Usage: query <ServerName> <PortNumber>");
-                    }
+                    case var configCommand when configCommand.StartsWith("config"):
+                        {
+                            string[] parts = configCommand.Split(' ', 2);
+                            if (parts.Length == 2)
+                            {
+                                if (int.TryParse(parts[1], out int minutes))
+                                {
+                                    ConfigureRefreshTime(minutes);
+                                }
+                                else
+                                {
+                                    Console.WriteLine("Invalid refresh time. Please enter a valid integer.");
+                                }
+                            }
+                            else
+                            {
+                                Console.WriteLine("Invalid command format. Usage: config <Minutes>");
+                            }
+                            break;
+                        }
+                    case "clear":
+                        await DisplayServerStatuses();
+                        break;
+                    case "exit":
+                        SaveServers();
+                        Environment.Exit(0);
+                        break;
+                    case "add":
+                        await AddServer();
+                        SaveServers();
+                        break;
+                    case "edit":
+                        await EditServer();
+                        SaveServers();
+                        break;
+                    case "remove":
+                        await RemoveServer();
+                        SaveServers();
+                        break;
+                    case var queryCommand when queryCommand.StartsWith("query"):
+                        {
+                            string[] parts = queryCommand.Split(' ', 3);
+                            if (parts.Length == 3)
+                            {
+                                string serverName = parts[1];
+                                string portNumberStr = parts[2];
+                                if (serverName.StartsWith('"') && serverName.EndsWith('"'))
+                                {
+                                    serverName = serverName.Trim('"');
+                                }
+                                if (int.TryParse(portNumberStr, out int portNumber))
+                                {
+                                    var server = GetServerByName(serverName);
+                                    if (server != null)
+                                    {
+                                        QueryServerPort(server, portNumber);
+                                    }
+                                    else
+                                    {
+                                        Console.WriteLine($"Server '{serverName}' does not exist.");
+                                    }
+                                }
+                                else
+                                {
+                                    Console.WriteLine("Invalid port number. Please enter a valid integer.");
+                                }
+                            }
+                            else
+                            {
+                                Console.WriteLine("Invalid command format. Usage: query <ServerName> <PortNumber>");
+                            }
+                            break;
+                        }
+                    case var tagCommand when tagCommand.StartsWith("tag"):
+                        {
+                            string[] parts = tagCommand.Split(' ', 3);
+                            if (parts.Length == 3)
+                            {
+                                string serverName = parts[1];
+                                string tag = parts[2];
+                                if (serverName.StartsWith('"') && serverName.EndsWith('"'))
+                                {
+                                    serverName = serverName.Trim('"');
+                                }
+                                var server = GetServerByName(serverName);
+                                if (server != null)
+                                {
+                                    server.Tags.Add(tag);
+                                    SaveServers();
+                                    Console.WriteLine($"Tag '{tag}' added to server '{server.Name}'.");
+                                }
+                                else
+                                {
+                                    Console.WriteLine($"Server '{serverName}' does not exist.");
+                                }
+                            }
+                            else
+                            {
+                                Console.WriteLine("Invalid command format. Usage: tag <ServerName> <Tag>");
+                            }
+                            break;
+                        }
+                    case var tagsCommand when tagsCommand.StartsWith("tags"):
+                        {
+                            string[] parts = tagsCommand.Split(' ', 2);
+                            if (parts.Length == 2)
+                            {
+                                string serverName = parts[1];
+                                if (serverName.StartsWith('"') && serverName.EndsWith('"'))
+                                {
+                                    serverName = serverName.Trim('"');
+                                }
+                                var server = GetServerByName(serverName);
+                                if (server != null)
+                                {
+                                    if (server.Tags.Count > 0)
+                                    {
+                                        Console.WriteLine($"Tags for server '{server.Name}':");
+                                        Console.WriteLine(string.Join(", ", server.Tags));
+                                    }
+                                    else
+                                    {
+                                        Console.WriteLine($"No tags found for server '{server.Name}'.");
+                                    }
+                                }
+                                else
+                                {
+                                    Console.WriteLine($"Server '{serverName}' does not exist.");
+                                }
+                            }
+                            else
+                            {
+                                Console.WriteLine("Invalid command format. Usage: tags <ServerName>");
+                            }
+                            break;
+                        }
+                    case var removeTagCommand when removeTagCommand.StartsWith("removetag"):
+                        {
+                            string[] parts = removeTagCommand.Split(' ', 3);
+                            if (parts.Length == 3)
+                            {
+                                string serverName = parts[1];
+                                string tag = parts[2];
+                                if (serverName.StartsWith('"') && serverName.EndsWith('"'))
+                                {
+                                    serverName = serverName.Trim('"');
+                                }
+                                var server = GetServerByName(serverName);
+                                if (server != null)
+                                {
+                                    if (server.Tags.Contains(tag))
+                                    {
+                                        server.Tags.Remove(tag);
+                                        SaveServers();
+                                        Console.WriteLine($"Tag '{tag}' removed from server '{server.Name}'.");
+                                    }
+                                    else
+                                    {
+                                        Console.WriteLine($"Tag '{tag}' not found for server '{server.Name}'.");
+                                    }
+                                }
+                                else
+                                {
+                                    Console.WriteLine($"Server '{serverName}' does not exist.");
+                                }
+                            }
+                            else
+                            {
+                                Console.WriteLine("Invalid command format. Usage: removetag <ServerName> <Tag>");
+                            }
+                            break;
+                        }
+                    default:
+                        Console.WriteLine("Invalid command. Type 'help' to see the available commands.");
+                        break;
                 }
             }
         }
@@ -532,15 +653,22 @@ namespace ServiceStatusChecker
 
     class Server
     {
-        public string Name { get; set; }
-        public string IPAddress { get; set; }
+        public string Name { get; set; } = "";
+        public string IPAddress { get; set; } = "";
         public bool MaintenanceMode { get; set; }
+        public List<string> Tags { get; set; }
+
+        public Server()
+        {
+            Tags = new List<string>();
+        }
 
         public Server(string name, string ipAddress)
         {
             Name = name;
             IPAddress = ipAddress;
             MaintenanceMode = false;
+            Tags = new List<string>();
         }
     }
 }
