@@ -1,5 +1,7 @@
 # Lumina Status Validator
 
+![Lumina Status Validator](images/lsv.png)
+
 The Lumina Status Validator is a command-line application that allows you to monitor the status of multiple servers. It provides real-time information about the server's availability, latency, and maintenance mode. You can configure the refresh time, add, edit, or remove servers, and query specific ports on the servers.
 
 ## Getting Started
