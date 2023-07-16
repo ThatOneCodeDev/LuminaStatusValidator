@@ -89,21 +89,52 @@ namespace ServiceStatusChecker
 
                     if (reply.Status == IPStatus.Success)
                     {
-                        Console.ForegroundColor = GetLatencyColor(reply.RoundtripTime);
+                        var clr = GetLatencyColor(reply.RoundtripTime);
+                        Console.ForegroundColor = clr;
                         Console.Write($"Server: {server.Name} is operational.");
                         Console.WriteLine();
                         Console.WriteLine($"Latency: {reply.RoundtripTime} ms");
+                        if (clr != ConsoleColor.Green)
+                        {
+                            Console.Beep(500, 500);
+                            await Task.Delay(550);
+                            Console.Beep(500, 500);
+                            await Task.Delay(550);
+                            Console.Beep(500, 500);
+                            await Task.Delay(550);
+                            Console.Beep(500, 500);
+                        }
                     }
                     else
                     {
                         Console.ForegroundColor = ConsoleColor.Red;
                         Console.WriteLine($"Server: {server.Name} is down.");
+                        if (OperatingSystem.IsWindows())
+                        {
+                            Console.Beep(500, 500);
+                            await Task.Delay(550);
+                            Console.Beep(500, 500);
+                            await Task.Delay(550);
+                            Console.Beep(500, 500);
+                            await Task.Delay(550);
+                            Console.Beep(500, 500);
+                        }
                     }
                 }
                 catch (PingException ex)
                 {
                     Console.ForegroundColor = ConsoleColor.Red;
                     Console.WriteLine($"Error pinging server '{server.Name}': {ex.Message}");
+                    if (OperatingSystem.IsWindows())
+                    {
+                        Console.Beep(500, 500);
+                        await Task.Delay(550);
+                        Console.Beep(500, 500);
+                        await Task.Delay(550);
+                        Console.Beep(500, 500);
+                        await Task.Delay(550);
+                        Console.Beep(500, 500);
+                    }
                 }
             }
 
