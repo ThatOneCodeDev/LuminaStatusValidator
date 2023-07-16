@@ -94,7 +94,7 @@ namespace ServiceStatusChecker
                         Console.Write($"Server: {server.Name} is operational.");
                         Console.WriteLine();
                         Console.WriteLine($"Latency: {reply.RoundtripTime} ms");
-                        if (clr != ConsoleColor.Green)
+                        if (clr != ConsoleColor.Green && OperatingSystem.IsWindows())
                         {
                             Console.Beep(500, 500);
                             await Task.Delay(550);
